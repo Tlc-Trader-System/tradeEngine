@@ -17,4 +17,7 @@ public class ValidatedOrder {
         this.quantity = quantity;
         this.side = side;
     }
+
+    public ValidatedOrder(String id, String price, int quantity, String side) {
+    }
 }

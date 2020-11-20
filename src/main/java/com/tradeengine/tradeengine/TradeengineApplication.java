@@ -61,7 +61,7 @@ public class TradeengineApplication {
 						PendingOrder[] pendingOrderList1 = Utility.convertToObject(jedis.rpop(data+"orderbook"),PendingOrder[].class);
 						PendingOrder[] pendingOrderList2 = Utility.convertToObject(jedis.rpop(data+"orderbook"),PendingOrder[].class);
 						/*
-						 *Logic
+						 * Logic
 						 * Get Exchange orders into one list
 						 * Sort list by price
 						 * if (side==Buy){
@@ -76,7 +76,7 @@ public class TradeengineApplication {
 						List<PendingOrder> pendingOrderList= new ArrayList(Arrays.asList(pendingOrderList1,pendingOrderList2));
 
 						//sorting
-						if (validatedOrder.side == "Buy") {
+						if (validatedOrder.side.toLowerCase() == "buy") {
 							pendingOrderList.sort(Comparator.comparing(PendingOrder::getPrice));
 						} else {
 							pendingOrderList.sort(Comparator.comparing(PendingOrder::getPrice).reversed());
@@ -85,24 +85,48 @@ public class TradeengineApplication {
 						//Popping and fulfilling orders
 						int orderquantity =0;
 						PendingOrder curExchangeOrder;
-						Object orderInfo;
+						int availableQty, buffer = 0;
+						ValidatedOrder partialOrder=null;
 						int targetQty =Integer.valueOf( validatedOrder.quantity);
-						while (orderquantity< targetQty){
+//						while (orderquantity<=targetQty){
+//
+//							curExchangeOrder = pendingOrderList.remove(0);
+//							availableQty=curExchangeOrder.quantity-curExchangeOrder.cumulativeQuantity;
+//
+//							if (availableQty >= targetQty) {
+//								partialOrder= new ValidatedOrder(validatedOrder.id,validatedOrder.product, validatedOrder.price,String.valueOf(targetQty),validatedOrder.side );
+//								orderquantity+=Integer.valueOf(availableQty);
+//								jedis.lpush("makeorder"+curExchangeOrder.exchange,partialOrder.toString());
+//							}
+//							else if (availableQty < targetQty ) {
+//								orderquantity+=availableQty;
+//								buffer=  orderquantity>targetQty ?
+//										targetQty-orderquantity-availableQty
+//										: availableQty;
+//								 partialOrder= new ValidatedOrder(validatedOrder.id,validatedOrder.product, validatedOrder.price,String.valueOf(buffer),validatedOrder.side );
+//								jedis.lpush("makeorder"+curExchangeOrder.exchange,partialOrder.toString());
+//								orderquantity+=availableQty;
+//							}
+
+						while (targetQty>0){
 							curExchangeOrder = pendingOrderList.remove(0);
-							if(Integer.valueOf(curExchangeOrder.quantity)>targetQty) {
-//									orderInfo = curExchangeOrder
-									orderquantity+=Integer.valueOf(curExchangeOrder.quantity);
+							availableQty= curExchangeOrder.quantity- curExchangeOrder.cumulativeQuantity;
+							if (availableQty >= targetQty) {
+								partialOrder=new ValidatedOrder(validatedOrder.id,validatedOrder.product, validatedOrder.price,String.valueOf(targetQty),validatedOrder.side );
+								targetQty=0;
+								jedis.lpush("makeorder"+curExchangeOrder.exchange,partialOrder.toString());
+							}
+							else if(pendingOrderList.isEmpty()){
+								partialOrder=new ValidatedOrder(validatedOrder.id,validatedOrder.product, validatedOrder.price,String.valueOf(targetQty),validatedOrder.side );
+								jedis.lpush("monitorqueue",partialOrder.toString());
 							}
 							else{
-								orderquantity+=Integer.valueOf(curExchangeOrder.quantity);
+								partialOrder=new ValidatedOrder(validatedOrder.id,validatedOrder.product, validatedOrder.price,String.valueOf(availableQty),validatedOrder.side );
+								targetQty-=availableQty;
+								jedis.lpush("makeorder"+curExchangeOrder.exchange,partialOrder.toString());
 							}
 
 						}
-
-
-//						ValidatedOrder fulfiiledOrder = Utility.convertToObject( jedis.get(data), ValidatedOrder.class);
-
-						jedis.lpush("makeorder"+"exchange1");
 
 					}else{
 						jedis.lpush("monitorqueue",data);
